@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Brian Clozel
  */
-public class CompoundRowTests {
+class CompoundRowTests {
 
 	private static final String NEWLINE = System.lineSeparator();
 
@@ -39,8 +39,8 @@ public class CompoundRowTests {
 		row.addProperty(new ConfigurationProperty("spring.test.third", "java.lang.String"));
 		Asciidoc asciidoc = new Asciidoc();
 		row.write(asciidoc);
-		assertThat(asciidoc.toString()).isEqualTo("|[[my.spring.test]]<<my.spring.test,`+spring.test.first+` +"
-				+ NEWLINE + "`+spring.test.second+` +" + NEWLINE + "`+spring.test.third+` +" + NEWLINE + ">>" + NEWLINE
+		assertThat(asciidoc).hasToString("|[[my.spring.test]]<<my.spring.test,`+spring.test.first+` +" + NEWLINE
+				+ "`+spring.test.second+` +" + NEWLINE + "`+spring.test.third+` +" + NEWLINE + ">>" + NEWLINE
 				+ "|+++This is a description.+++" + NEWLINE + "|" + NEWLINE);
 	}
 

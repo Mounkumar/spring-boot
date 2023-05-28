@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,17 +30,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import javax.websocket.ClientEndpointConfig;
-import javax.websocket.ClientEndpointConfig.Configurator;
-import javax.websocket.Endpoint;
-import javax.websocket.HandshakeResponse;
-import javax.websocket.WebSocketContainer;
-
+import jakarta.websocket.ClientEndpointConfig;
+import jakarta.websocket.ClientEndpointConfig.Configurator;
+import jakarta.websocket.Endpoint;
+import jakarta.websocket.Extension;
+import jakarta.websocket.HandshakeResponse;
+import jakarta.websocket.WebSocketContainer;
 import org.apache.tomcat.websocket.WsWebSocketContainer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -49,7 +52,6 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.http.HttpHeaders;
-import org.springframework.util.concurrent.ListenableFuture;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.PingMessage;
@@ -111,8 +113,8 @@ class LiveReloadServerTests {
 	void triggerReload() throws Exception {
 		LiveReloadWebSocketHandler handler = connect();
 		this.server.triggerReload();
-		List<String> messages = await().atMost(Duration.ofSeconds(10)).until(handler::getMessages,
-				(msgs) -> msgs.size() == 2);
+		List<String> messages = await().atMost(Duration.ofSeconds(10))
+			.until(handler::getMessages, (msgs) -> msgs.size() == 2);
 		assertThat(messages.get(0)).contains("http://livereload.com/protocols/official-7");
 		assertThat(messages.get(1)).contains("command\":\"reload\"");
 	}
@@ -121,8 +123,8 @@ class LiveReloadServerTests {
 	void triggerReloadWithUppercaseHeaders() throws Exception {
 		LiveReloadWebSocketHandler handler = connect(UppercaseWebSocketClient::new);
 		this.server.triggerReload();
-		List<String> messages = await().atMost(Duration.ofSeconds(10)).until(handler::getMessages,
-				(msgs) -> msgs.size() == 2);
+		List<String> messages = await().atMost(Duration.ofSeconds(10))
+			.until(handler::getMessages, (msgs) -> msgs.size() == 2);
 		assertThat(messages.get(0)).contains("http://livereload.com/protocols/official-7");
 		assertThat(messages.get(1)).contains("command\":\"reload\"");
 	}
@@ -139,7 +141,7 @@ class LiveReloadServerTests {
 		LiveReloadWebSocketHandler handler = connect();
 		handler.close();
 		awaitClosedException();
-		assertThat(this.server.getClosedExceptions().size()).isGreaterThan(0);
+		assertThat(this.server.getClosedExceptions()).isNotEmpty();
 	}
 
 	private void awaitClosedException() {
@@ -150,8 +152,8 @@ class LiveReloadServerTests {
 	void serverClose() throws Exception {
 		LiveReloadWebSocketHandler handler = connect();
 		this.server.stop();
-		CloseStatus closeStatus = await().atMost(Duration.ofSeconds(10)).until(handler::getCloseStatus,
-				Objects::nonNull);
+		CloseStatus closeStatus = await().atMost(Duration.ofSeconds(10))
+			.until(handler::getCloseStatus, Objects::nonNull);
 		assertThat(closeStatus.getCode()).isEqualTo(1006);
 	}
 
@@ -164,7 +166,7 @@ class LiveReloadServerTests {
 		WsWebSocketContainer webSocketContainer = new WsWebSocketContainer();
 		WebSocketClient client = clientFactory.apply(webSocketContainer);
 		LiveReloadWebSocketHandler handler = new LiveReloadWebSocketHandler();
-		client.doHandshake(handler, "ws://localhost:" + this.port + "/livereload");
+		client.execute(handler, "ws://localhost:" + this.port + "/livereload");
 		handler.awaitHello();
 		return handler;
 	}
@@ -218,17 +220,17 @@ class LiveReloadServerTests {
 
 	}
 
-	static class LiveReloadWebSocketHandler extends TextWebSocketHandler {
+	class LiveReloadWebSocketHandler extends TextWebSocketHandler {
 
-		private WebSocketSession session;
+		private volatile WebSocketSession session;
 
 		private final CountDownLatch helloLatch = new CountDownLatch(2);
 
-		private final List<String> messages = new ArrayList<>();
+		private final List<String> messages = new CopyOnWriteArrayList<>();
 
-		private int pongCount;
+		private final AtomicInteger pongCount = new AtomicInteger();
 
-		private CloseStatus closeStatus;
+		private volatile CloseStatus closeStatus;
 
 		@Override
 		public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -239,20 +241,20 @@ class LiveReloadServerTests {
 
 		void awaitHello() throws InterruptedException {
 			this.helloLatch.await(1, TimeUnit.MINUTES);
-			Thread.sleep(200);
 		}
 
 		@Override
 		protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-			if (message.getPayload().contains("hello")) {
+			String payload = message.getPayload();
+			this.messages.add(payload);
+			if (payload.contains("hello")) {
 				this.helloLatch.countDown();
 			}
-			this.messages.add(message.getPayload());
 		}
 
 		@Override
 		protected void handlePongMessage(WebSocketSession session, PongMessage message) {
-			this.pongCount++;
+			this.pongCount.incrementAndGet();
 		}
 
 		@Override
@@ -273,7 +275,7 @@ class LiveReloadServerTests {
 		}
 
 		int getPongCount() {
-			return this.pongCount;
+			return this.pongCount.get();
 		}
 
 		CloseStatus getCloseStatus() {
@@ -292,25 +294,26 @@ class LiveReloadServerTests {
 		}
 
 		@Override
-		protected ListenableFuture<WebSocketSession> doHandshakeInternal(WebSocketHandler webSocketHandler,
+		protected CompletableFuture<WebSocketSession> executeInternal(WebSocketHandler webSocketHandler,
 				HttpHeaders headers, URI uri, List<String> protocols, List<WebSocketExtension> extensions,
 				Map<String, Object> attributes) {
 			InetSocketAddress localAddress = new InetSocketAddress(getLocalHost(), uri.getPort());
 			InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), uri.getPort());
 			StandardWebSocketSession session = new StandardWebSocketSession(headers, attributes, localAddress,
 					remoteAddress);
+			Stream<Extension> adaptedExtensions = extensions.stream().map(WebSocketToStandardExtensionAdapter::new);
 			ClientEndpointConfig endpointConfig = ClientEndpointConfig.Builder.create()
-					.configurator(new UppercaseWebSocketClientConfigurator(headers)).preferredSubprotocols(protocols)
-					.extensions(extensions.stream().map(WebSocketToStandardExtensionAdapter::new)
-							.collect(Collectors.toList()))
-					.build();
+				.configurator(new UppercaseWebSocketClientConfigurator(headers))
+				.preferredSubprotocols(protocols)
+				.extensions(adaptedExtensions.toList())
+				.build();
 			endpointConfig.getUserProperties().putAll(getUserProperties());
 			Endpoint endpoint = new StandardWebSocketHandlerAdapter(webSocketHandler, session);
 			Callable<WebSocketSession> connectTask = () -> {
 				this.webSocketContainer.connectToServer(endpoint, endpointConfig, uri);
 				return session;
 			};
-			return getTaskExecutor().submitListenable(connectTask);
+			return getTaskExecutor().submitCompletable(connectTask);
 		}
 
 		private InetAddress getLocalHost() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,8 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests for {@link Restarter}.
@@ -75,11 +75,11 @@ class RestarterTests {
 	void cantGetInstanceBeforeInitialize() {
 		Restarter.clearInstance();
 		assertThatIllegalStateException().isThrownBy(Restarter::getInstance)
-				.withMessageContaining("Restarter has not been initialized");
+			.withMessageContaining("Restarter has not been initialized");
 	}
 
 	@Test
-	void testRestart(CapturedOutput output) throws Exception {
+	void testRestart(CapturedOutput output) {
 		Restarter.clearInstance();
 		Thread thread = new Thread(SampleApplication::main);
 		thread.start();
@@ -102,7 +102,7 @@ class RestarterTests {
 	@Test
 	void addUrlsMustNotBeNull() {
 		assertThatIllegalArgumentException().isThrownBy(() -> Restarter.getInstance().addUrls(null))
-				.withMessageContaining("Urls must not be null");
+			.withMessageContaining("Urls must not be null");
 	}
 
 	@Test
@@ -119,7 +119,7 @@ class RestarterTests {
 	@Test
 	void addClassLoaderFilesMustNotBeNull() {
 		assertThatIllegalArgumentException().isThrownBy(() -> Restarter.getInstance().addClassLoaderFiles(null))
-				.withMessageContaining("ClassLoaderFiles must not be null");
+			.withMessageContaining("ClassLoaderFiles must not be null");
 	}
 
 	@Test
@@ -140,7 +140,7 @@ class RestarterTests {
 		ObjectFactory objectFactory = mock(ObjectFactory.class);
 		Object attribute = Restarter.getInstance().getOrAddAttribute("x", objectFactory);
 		assertThat(attribute).isEqualTo("abc");
-		verifyNoInteractions(objectFactory);
+		then(objectFactory).shouldHaveNoInteractions();
 	}
 
 	@Test

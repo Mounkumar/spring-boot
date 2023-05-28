@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,6 +98,13 @@ public abstract class AbstractPackagerMojo extends AbstractDependencyFilterMojo 
 	private boolean excludeDevtools = true;
 
 	/**
+	 * Exclude Spring Boot dev services from the repackaged archive.
+	 * @since 3.1.0
+	 */
+	@Parameter(property = "spring-boot.repackage.excludeDockerCompose", defaultValue = "true")
+	private boolean excludeDockerCompose = true;
+
+	/**
 	 * Include system scoped dependencies.
 	 * @since 1.4.0
 	 */
@@ -171,6 +178,7 @@ public abstract class AbstractPackagerMojo extends AbstractDependencyFilterMojo 
 	private Document getDocumentIfAvailable(File xmlFile) throws Exception {
 		InputSource inputSource = new InputSource(new FileInputStream(xmlFile));
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setNamespaceAware(true);
 		DocumentBuilder builder = factory.newDocumentBuilder();
 		return builder.parse(inputSource);
 	}
@@ -183,18 +191,17 @@ public abstract class AbstractPackagerMojo extends AbstractDependencyFilterMojo 
 	 */
 	protected final Libraries getLibraries(Collection<Dependency> unpacks) throws MojoExecutionException {
 		Set<Artifact> artifacts = this.project.getArtifacts();
-		Set<Artifact> includedArtifacts = filterDependencies(artifacts, getFilters(getAdditionalFilters()));
+		Set<Artifact> includedArtifacts = filterDependencies(artifacts, getAdditionalFilters());
 		return new ArtifactsLibraries(artifacts, includedArtifacts, this.session.getProjects(), unpacks, getLog());
 	}
 
 	private ArtifactsFilter[] getAdditionalFilters() {
 		List<ArtifactsFilter> filters = new ArrayList<>();
 		if (this.excludeDevtools) {
-			Exclude exclude = new Exclude();
-			exclude.setGroupId("org.springframework.boot");
-			exclude.setArtifactId("spring-boot-devtools");
-			ExcludeFilter filter = new ExcludeFilter(exclude);
-			filters.add(filter);
+			filters.add(DEVTOOLS_EXCLUDE_FILTER);
+		}
+		if (this.excludeDockerCompose) {
+			filters.add(DOCKER_COMPOSE_EXCLUDE_FILTER);
 		}
 		if (!this.includeSystemScope) {
 			filters.add(new ScopeFilter(null, Artifact.SCOPE_SYSTEM));

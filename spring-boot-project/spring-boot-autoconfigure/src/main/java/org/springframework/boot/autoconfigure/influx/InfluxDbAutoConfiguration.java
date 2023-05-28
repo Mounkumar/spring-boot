@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,18 @@
 
 package org.springframework.boot.autoconfigure.influx;
 
-import com.influxdb.client.InfluxDBClient;
-import com.influxdb.client.InfluxDBClientFactory;
-import com.influxdb.client.InfluxDBClientOptions;
-import com.influxdb.client.InfluxDBClientOptions.Builder;
 import okhttp3.OkHttpClient;
 import org.influxdb.InfluxDB;
 import org.influxdb.impl.InfluxDBImpl;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.util.StringUtils;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for InfluxDB.
@@ -40,54 +35,32 @@ import org.springframework.util.StringUtils;
  * @author Sergey Kuptsov
  * @author Stephane Nicoll
  * @author Eddú Meléndez
+ * @author Moritz Halbritter
+ * @author Andy Wilkinson
+ * @author Phillip Webb
  * @since 2.0.0
  */
-@Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty("spring.influx.url")
+@AutoConfiguration
+@ConditionalOnClass(InfluxDB.class)
 @EnableConfigurationProperties(InfluxDbProperties.class)
+@ConditionalOnProperty("spring.influx.url")
 public class InfluxDbAutoConfiguration {
+
+	@Bean
+	@ConditionalOnMissingBean
+	public InfluxDB influxDb(InfluxDbProperties properties, ObjectProvider<InfluxDbOkHttpClientBuilderProvider> builder,
+			ObjectProvider<InfluxDbCustomizer> customizers) {
+		InfluxDB influxDb = new InfluxDBImpl(properties.getUrl().toString(), properties.getUser(),
+				properties.getPassword(), determineBuilder(builder.getIfAvailable()));
+		customizers.orderedStream().forEach((customizer) -> customizer.customize(influxDb));
+		return influxDb;
+	}
 
 	private static OkHttpClient.Builder determineBuilder(InfluxDbOkHttpClientBuilderProvider builder) {
 		if (builder != null) {
 			return builder.get();
 		}
 		return new OkHttpClient.Builder();
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@ConditionalOnClass(InfluxDB.class)
-	static class Influx1xConfiguration {
-
-		@Bean
-		@ConditionalOnMissingBean
-		InfluxDB influxDb(InfluxDbProperties properties, ObjectProvider<InfluxDbOkHttpClientBuilderProvider> builder,
-				ObjectProvider<InfluxDbCustomizer> customizers) {
-			InfluxDB influxDb = new InfluxDBImpl(properties.getUrl(), properties.getUser(), properties.getPassword(),
-					determineBuilder(builder.getIfAvailable()));
-			customizers.orderedStream().forEach((customizer) -> customizer.customize(influxDb));
-			return influxDb;
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@ConditionalOnClass(InfluxDBClient.class)
-	static class Influx2xConfiguration {
-
-		@Bean
-		@ConditionalOnMissingBean
-		InfluxDBClient influxDbClient(InfluxDbProperties properties,
-				ObjectProvider<InfluxDbOkHttpClientBuilderProvider> httpClientBuilder,
-				ObjectProvider<InfluxDbClientOptionsBuilderCustomizer> customizers) {
-			Builder builder = InfluxDBClientOptions.builder().url(properties.getUrl());
-			if (StringUtils.hasText(properties.getUser()) && StringUtils.hasText(properties.getPassword())) {
-				builder.authenticate(properties.getUser(), properties.getPassword().toCharArray());
-			}
-			builder.okHttpClient(determineBuilder(httpClientBuilder.getIfAvailable()));
-			customizers.orderedStream().forEach((customizer) -> customizer.customize(builder));
-			return InfluxDBClientFactory.create(builder.build());
-		}
-
 	}
 
 }

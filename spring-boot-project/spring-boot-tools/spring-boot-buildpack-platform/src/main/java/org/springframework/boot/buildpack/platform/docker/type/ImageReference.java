@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.springframework.util.ObjectUtils;
  *
  * @author Phillip Webb
  * @author Scott Frederick
+ * @author Moritz Halbritter
  * @since 2.3.0
  * @see ImageName
  */
@@ -154,8 +155,19 @@ public final class ImageReference {
 	}
 
 	/**
+	 * Return an {@link ImageReference} without the tag.
+	 * @return the image reference in tagless form
+	 */
+	public ImageReference inTaglessForm() {
+		if (this.tag == null) {
+			return this;
+		}
+		return new ImageReference(this.name, null, this.digest);
+	}
+
+	/**
 	 * Return an {@link ImageReference} containing either a tag or a digest. If neither
-	 * the digest or the tag has been defined then tag {@code latest} is used.
+	 * the digest nor the tag has been defined then tag {@code latest} is used.
 	 * @return the image reference in tagged or digest form
 	 */
 	public ImageReference inTaggedOrDigestForm() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,11 @@
 
 package org.springframework.boot.test.autoconfigure.data.cassandra;
 
-import java.time.Duration;
 import java.util.UUID;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -30,12 +28,11 @@ import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.data.redis.ExampleService;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testsupport.testcontainers.DockerImageNames;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.boot.testsupport.testcontainers.CassandraContainer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.cassandra.core.CassandraTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -44,23 +41,19 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  * Integration test for {@link DataCassandraTest @DataCassandraTest}.
  *
  * @author Artsiom Yudovin
+ * @author Moritz Halbritter
+ * @author Andy Wilkinson
+ * @author Phillip Webb
  */
-@DataCassandraTest(properties = { "spring.data.cassandra.local-datacenter=datacenter1",
-		"spring.data.cassandra.schema-action=create-if-not-exists",
-		"spring.data.cassandra.connection.connect-timeout=20s",
-		"spring.data.cassandra.connection.init-query-timeout=2s", "spring.data.cassandra.request.timeout=10s" })
+@DataCassandraTest(properties = { "spring.cassandra.schema-action=create-if-not-exists",
+		"spring.cassandra.connection.connect-timeout=60s", "spring.cassandra.connection.init-query-timeout=60s",
+		"spring.cassandra.request.timeout=60s" })
 @Testcontainers(disabledWithoutDocker = true)
 class DataCassandraTestIntegrationTests {
 
 	@Container
-	static final CassandraContainer<?> cassandra = new CassandraContainer<>(DockerImageNames.cassandra())
-			.withStartupAttempts(5).withStartupTimeout(Duration.ofMinutes(10));
-
-	@DynamicPropertySource
-	static void cassandraProperties(DynamicPropertyRegistry registry) {
-		registry.add("spring.data.cassandra.contact-points",
-				() -> cassandra.getHost() + ":" + cassandra.getFirstMappedPort());
-	}
+	@ServiceConnection
+	static final CassandraContainer cassandra = new CassandraContainer();
 
 	@Autowired
 	private CassandraTemplate cassandraTemplate;
@@ -74,7 +67,7 @@ class DataCassandraTestIntegrationTests {
 	@Test
 	void didNotInjectExampleService() {
 		assertThatExceptionOfType(NoSuchBeanDefinitionException.class)
-				.isThrownBy(() -> this.applicationContext.getBean(ExampleService.class));
+			.isThrownBy(() -> this.applicationContext.getBean(ExampleService.class));
 	}
 
 	@Test
